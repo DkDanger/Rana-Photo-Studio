@@ -28,6 +28,8 @@ export default function App() {
   const [settings, setSettings] = useState<PrintSettings>(DEFAULT_PRINT_SETTINGS);
   const [customColor, setCustomColor] = useState('#ffffff');
   const [busy, setBusy] = useState(false);
+  const [cropMode, setCropMode] = useState(false);
+  const dragRef = useRef<{ pointerId: number; x: number; y: number; offsetX: number; offsetY: number } | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const t = (key: Parameters<typeof getText>[1]) => getText(language, key);
   const selected = photos.find(photo => photo.id === selectedId) ?? photos[0] ?? null;
@@ -52,7 +54,7 @@ export default function App() {
     for (const item of added) {
       try {
         const result = await removeBackground(item.file, {
-          quality: 'quality',
+          quality: 'fast',
           onProgress: ({ progress }) => {
             const value = typeof progress === 'number' ? Math.max(0, Math.min(100, Math.round(progress * 100))) : 0;
             setPhotos(items => items.map(photo => photo.id === item.photo.id ? { ...photo, bgProgress: value } : photo));
@@ -69,6 +71,23 @@ export default function App() {
           : photo));
       }
     }
+  }
+  function startPhotoDrag(event: React.PointerEvent<HTMLDivElement>) {
+    if (!selected || !cropMode) return;
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    dragRef.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, offsetX: selected.offsetX, offsetY: selected.offsetY };
+  }
+  function movePhotoDrag(event: React.PointerEvent<HTMLDivElement>) {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId || !selected) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    const dx = (event.clientX - drag.x) / rect.width * 100;
+    const dy = (event.clientY - drag.y) / rect.height * 100;
+    updateSelected({ offsetX: Math.max(-100, Math.min(100, drag.offsetX + dx)), offsetY: Math.max(-100, Math.min(100, drag.offsetY + dy)) });
+  }
+  function stopPhotoDrag(event: React.PointerEvent<HTMLDivElement>) {
+    if (dragRef.current?.pointerId === event.pointerId) dragRef.current = null;
   }
   function removePhoto(id: string) {
     setPhotos(items => {
@@ -145,11 +164,11 @@ export default function App() {
         <section className="panel editor-panel">
           <div className="panel-heading"><div><p className="eyebrow">{t('editor')}</p><h2>{selected?.name ?? t('noPhoto')}</h2></div>{selected && <button className="icon-button danger" title={t('remove')} onClick={() => removePhoto(selected.id)}><Trash2 size={17}/></button>}</div>
           {selected ? <>
-            <div className="photo-stage"><div className="photo-preview" style={{ backgroundColor: selected.background }}><img src={selected.source} alt="Selected passport portrait" style={{ transform: `rotate(${selected.rotation}deg) scale(${selected.zoom})`, filter: `brightness(${selected.brightness}%) contrast(${selected.contrast}%) saturate(${selected.saturation}%)` }} /></div></div>
+            <div className="photo-stage"><div className={cropMode ? "photo-preview crop-active" : "photo-preview"} style={{ backgroundColor: selected.background }} onPointerDown={startPhotoDrag} onPointerMove={movePhotoDrag} onPointerUp={stopPhotoDrag} onPointerCancel={stopPhotoDrag}><img draggable={false} src={selected.source} alt="Selected passport portrait" style={{ transform: `translate(${selected.offsetX}%, ${selected.offsetY}%) rotate(${selected.rotation}deg) scale(${selected.zoom})`, filter: `brightness(${selected.brightness}%) contrast(${selected.contrast}%) saturate(${selected.saturation}%)` }} /></div></div>
             {selected.bgStatus === 'processing' && <p className="help-note">{t('bgRemoving')} {selected.bgProgress ?? 0}%</p>}
             {selected.bgStatus === 'done' && <p className="help-note">{t('bgRemoved')}</p>}
             {selected.bgStatus === 'failed' && <p className="help-note">{t('bgFailed')} {selected.bgError ? `(${selected.bgError})` : ''}</p>}
-            <div className="size-line"><span>{t('size')}</span><span>{t('dpi')}</span></div>
+            <div className="editor-actions crop-actions"><button className={cropMode ? "button button-primary" : "button button-outline"} onClick={() => setCropMode(value => !value)}>{t('cropMove')}</button><button className="button button-outline" onClick={() => updateSelected({ offsetX: 0, offsetY: 0 })}>{t('autoCenter')}</button></div><p className="help-note">{cropMode ? t('dragPhoto') : t('cropHint')}</p><div className="size-line"><span>{t('size')}</span><span>{t('dpi')}</span></div>
             <div className="control-block"><label>{t('background')}</label><div className="swatches">{backgrounds.map(color => <button key={color.value} title={color.name} className={selected.background === color.value ? 'swatch active' : 'swatch'} style={{ background: color.value }} onClick={() => updateSelected({ background: color.value })}/>)}
               <label className="custom-color">{t('custom')}<input type="color" value={customColor} onChange={event => {setCustomColor(event.target.value); updateSelected({background:event.target.value});}} /></label></div>
               <button className="text-button" onClick={() => applyBackgroundToAll(selected.background)}>{t('applyAll')}</button><p className="help-note">{t('bgNote')}</p>
