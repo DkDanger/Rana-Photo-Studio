@@ -52,7 +52,6 @@ export default function App() {
     for (const item of added) {
       try {
         const result = await removeBackground(item.file, {
-          model: 'lite',
           quality: 'quality',
           onProgress: ({ progress }) => {
             const value = typeof progress === 'number' ? Math.max(0, Math.min(100, Math.round(progress * 100))) : 0;
