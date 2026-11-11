@@ -7,7 +7,6 @@ export function calculateLayout(photos: PhotoItem[], settings: PrintSettings): L
   const pageWidth = settings.orientation === 'portrait' ? A4_WIDTH_MM : A4_HEIGHT_MM;
   const pageHeight = settings.orientation === 'portrait' ? A4_HEIGHT_MM : A4_WIDTH_MM;
   const usableWidth = pageWidth - settings.marginMm * 2;
-  const usableHeight = pageHeight - settings.marginMm * 2;
   const maxColumns = Math.max(1, Math.floor((usableWidth + settings.spacingMm) / (PHOTO_WIDTH_MM + settings.spacingMm)));
   const columns = Math.max(1, Math.min(settings.columns, maxColumns));
   const cells: LayoutCell[] = [];
