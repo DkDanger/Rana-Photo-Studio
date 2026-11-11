@@ -17,6 +17,31 @@ const backgrounds = [
   { name: 'Black', value: '#111827' },
 ];
 
+
+async function prepareBackgroundImage(file: File, maxEdge: number): Promise<{ blob: Blob; width: number; height: number }> {
+  const bitmap = await createImageBitmap(file);
+  try {
+    const longestEdge = Math.max(bitmap.width, bitmap.height);
+    const scale = Math.min(1, maxEdge / longestEdge);
+    const width = Math.max(1, Math.round(bitmap.width * scale));
+    const height = Math.max(1, Math.round(bitmap.height * scale));
+    if (scale === 1) return { blob: file, width, height };
+
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext('2d');
+    if (!context) throw new Error('Could not prepare a smaller image for background removal.');
+    context.drawImage(bitmap, 0, 0, width, height);
+    const blob = await new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob(value => value ? resolve(value) : reject(new Error('Could not resize this photo.')), 'image/png');
+    });
+    return { blob, width, height };
+  } finally {
+    bitmap.close();
+  }
+}
+
 const newPhoto = (file: File, source: string): PhotoItem => ({
   id: createId(), name: file.name, source, copies: 1, background: '#ffffff',
   rotation: 0, brightness: 100, contrast: 100, saturation: 100, zoom: 1, offsetX: 0, offsetY: 0,
@@ -55,13 +80,21 @@ export default function App() {
     // Process sequentially to avoid exhausting memory on phones.
     for (const item of added) {
       try {
-        const result = await removeBackground(item.file, {
-          quality: 'fast',
-          onProgress: ({ progress }) => {
-            const value = typeof progress === 'number' ? Math.max(0, Math.min(100, Math.round(progress * 100))) : 0;
-            setPhotos(items => items.map(photo => photo.id === item.photo.id ? { ...photo, bgProgress: value } : photo));
-          },
-        });
+        const onProgress = ({ progress }: { progress?: number }) => {
+          const value = typeof progress === 'number' ? Math.max(0, Math.min(100, Math.round(progress * 100))) : 0;
+          setPhotos(items => items.map(photo => photo.id === item.photo.id ? { ...photo, bgProgress: value } : photo));
+        };
+        // Keep AI input within a phone-friendly size; passport output needs far fewer pixels.
+        const prepared = await prepareBackgroundImage(item.file, 1280);
+        let result;
+        try {
+          result = await removeBackground(prepared.blob, { quality: 'fast', onProgress });
+        } catch (firstError) {
+          // Retry once with a smaller input when a large image exhausts browser memory.
+          if (Math.max(prepared.width, prepared.height) <= 768) throw firstError;
+          const smaller = await prepareBackgroundImage(item.file, 768);
+          result = await removeBackground(smaller.blob, { quality: 'fast', onProgress });
+        }
         const transparentSource = URL.createObjectURL(result.blob);
         setPhotos(items => items.map(photo => photo.id === item.photo.id
           ? { ...photo, source: transparentSource, bgStatus: 'done', bgProgress: 100 }
@@ -189,7 +222,7 @@ export default function App() {
             <label>{t('spacing')}<input type="number" min="0" max="15" value={settings.spacingMm} onChange={event => setSettings(s => ({...s,spacingMm:Math.max(0,Number(event.target.value))}))}/></label>
             <label>{t('columns')}<select value={settings.columns} onChange={event => setSettings(s => ({...s,columns:Number(event.target.value)}))}>{[1,2,3,4,5,6].map(n=><option key={n} value={n}>{n}</option>)}</select></label>
           </div>
-          <div className="paper-wrap"><div className={settings.orientation === 'portrait' ? 'paper' : 'paper landscape'}>{cells.map((cell,index)=><div key={cell.photo.id + '-' + index} className="paper-photo" style={{left:`${cell.x/(settings.orientation === 'portrait'?210:297)*100}%`,top:`${cell.y/(settings.orientation === 'portrait'?297:210)*100}%`,width:`${35/(settings.orientation === 'portrait'?210:297)*100}%`,height:`${45/(settings.orientation === 'portrait'?297:210)*100}%`,background:cell.photo.background}}><img src={cell.photo.source} alt="" style={{filter:`brightness(${cell.photo.brightness}%) contrast(${cell.photo.contrast}%) saturate(${cell.photo.saturation}%)`,transform:`rotate(${cell.photo.rotation}deg) scale(${cell.photo.zoom})`}}/></div>)}</div></div>
+          <div className="paper-wrap"><div className={settings.orientation === 'portrait' ? 'paper' : 'paper landscape'}>{cells.map((cell,index)=><div key={cell.photo.id + '-' + index} className="paper-photo" style={{left:`${cell.x/(settings.orientation === 'portrait'?210:297)*100}%`,top:`${cell.y/(settings.orientation === 'portrait'?297:210)*100}%`,width:`${35/(settings.orientation === 'portrait'?210:297)*100}%`,height:`${45/(settings.orientation === 'portrait'?297:210)*100}%`,background:cell.photo.background}}><img src={cell.photo.source} alt="" style={{filter:`brightness(${cell.photo.brightness}%) contrast(${cell.photo.contrast}%) saturate(${cell.photo.saturation}%)`,transform:`translate(${cell.photo.offsetX}%, ${cell.photo.offsetY}%) rotate(${cell.photo.rotation}deg) scale(${cell.photo.zoom})`,filter:`brightness(${cell.photo.brightness}%) contrast(${cell.photo.contrast}%) saturate(${cell.photo.saturation}%)`}}/></div>)}</div></div>
           <p className="muted small">{t('fitWarning')}</p>
           {cells.length < total && <p className="capacity-warning">{t('capacityWarning')}</p>}
           <div className="print-actions"><button className="button button-outline" disabled={!savedPhotos.length || busy} onClick={printSheet}><Printer size={17}/>{t('print')}</button><button className="button button-primary" disabled={!savedPhotos.length || busy} onClick={exportPdf}><Download size={17}/>{busy ? '…' : t('pdf')}</button></div>
