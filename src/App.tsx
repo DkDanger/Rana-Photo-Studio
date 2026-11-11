@@ -140,6 +140,7 @@ export default function App() {
           </div>
           <div className="paper-wrap"><div className={settings.orientation === 'portrait' ? 'paper' : 'paper landscape'}>{cells.map((cell,index)=><div key={cell.photo.id + '-' + index} className="paper-photo" style={{left:`${cell.x/(settings.orientation === 'portrait'?210:297)*100}%`,top:`${cell.y/(settings.orientation === 'portrait'?297:210)*100}%`,width:`${35/(settings.orientation === 'portrait'?210:297)*100}%`,height:`${45/(settings.orientation === 'portrait'?297:210)*100}%`,background:cell.photo.background}}><img src={cell.photo.source} alt="" style={{filter:`brightness(${cell.photo.brightness}%) contrast(${cell.photo.contrast}%) saturate(${cell.photo.saturation}%)`,transform:`rotate(${cell.photo.rotation}deg) scale(${cell.photo.zoom})`}}/></div>)}</div></div>
           <p className="muted small">{t('fitWarning')}</p>
+          {cells.length < total && <p className="capacity-warning">{t('capacityWarning')}</p>}
           <div className="print-actions"><button className="button button-outline" disabled={!photos.length || busy} onClick={printSheet}><Printer size={17}/>{t('print')}</button><button className="button button-primary" disabled={!photos.length || busy} onClick={exportPdf}><Download size={17}/>{busy ? '…' : t('pdf')}</button></div>
         </section>
       </div>
