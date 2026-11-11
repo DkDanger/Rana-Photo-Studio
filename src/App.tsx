@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from 'react';
 import { Camera, FileImage, Languages, Minus, Plus, Printer, RotateCw, Trash2, Upload, Download, ShieldCheck } from 'lucide-react';
 import { jsPDF } from 'jspdf';
+import { removeBackground } from '@bg0/browser';
 import type { Language, PhotoItem, PrintSettings } from './types';
 import { DEFAULT_PRINT_SETTINGS } from './types';
 import { getText } from './i18n';
@@ -37,11 +38,38 @@ export default function App() {
     if (!selected) return;
     setPhotos(items => items.map(photo => photo.id === selected.id ? { ...photo, ...patch } : photo));
   }
-  function addFiles(files: FileList | File[]) {
+  async function addFiles(files: FileList | File[]) {
     const valid = Array.from(files).filter(file => ['image/jpeg', 'image/png', 'image/webp'].includes(file.type));
-    const added = valid.map(file => newPhoto(file, URL.createObjectURL(file)));
-    setPhotos(items => [...items, ...added]);
-    if (added[0]) setSelectedId(added[0].id);
+    const added = valid.map(file => ({
+      file,
+      photo: { ...newPhoto(file, URL.createObjectURL(file)), bgStatus: 'processing' as const, bgProgress: 0 },
+    }));
+    if (!added.length) return;
+    setPhotos(items => [...items, ...added.map(item => item.photo)]);
+    if (added[0]) setSelectedId(added[0].photo.id);
+
+    // Process sequentially to avoid exhausting memory on phones.
+    for (const item of added) {
+      try {
+        const result = await removeBackground(item.file, {
+          model: 'lite',
+          quality: 'quality',
+          onProgress: ({ progress }) => {
+            const value = typeof progress === 'number' ? Math.max(0, Math.min(100, Math.round(progress))) : 0;
+            setPhotos(items => items.map(photo => photo.id === item.photo.id ? { ...photo, bgProgress: value } : photo));
+          },
+        });
+        const transparentSource = URL.createObjectURL(result.blob);
+        setPhotos(items => items.map(photo => photo.id === item.photo.id
+          ? { ...photo, source: transparentSource, bgStatus: 'done', bgProgress: 100 }
+          : photo));
+        URL.revokeObjectURL(item.photo.source);
+      } catch {
+        setPhotos(items => items.map(photo => photo.id === item.photo.id
+          ? { ...photo, bgStatus: 'failed' }
+          : photo));
+      }
+    }
   }
   function removePhoto(id: string) {
     setPhotos(items => {
@@ -119,6 +147,9 @@ export default function App() {
           <div className="panel-heading"><div><p className="eyebrow">{t('editor')}</p><h2>{selected?.name ?? t('noPhoto')}</h2></div>{selected && <button className="icon-button danger" title={t('remove')} onClick={() => removePhoto(selected.id)}><Trash2 size={17}/></button>}</div>
           {selected ? <>
             <div className="photo-stage"><div className="photo-preview" style={{ backgroundColor: selected.background }}><img src={selected.source} alt="Selected passport portrait" style={{ transform: `rotate(${selected.rotation}deg) scale(${selected.zoom})`, filter: `brightness(${selected.brightness}%) contrast(${selected.contrast}%) saturate(${selected.saturation}%)` }} /></div></div>
+            {selected.bgStatus === 'processing' && <p className="help-note">{t('bgRemoving')} {selected.bgProgress ?? 0}%</p>}
+            {selected.bgStatus === 'done' && <p className="help-note">{t('bgRemoved')}</p>}
+            {selected.bgStatus === 'failed' && <p className="help-note">{t('bgFailed')}</p>}
             <div className="size-line"><span>{t('size')}</span><span>{t('dpi')}</span></div>
             <div className="control-block"><label>{t('background')}</label><div className="swatches">{backgrounds.map(color => <button key={color.value} title={color.name} className={selected.background === color.value ? 'swatch active' : 'swatch'} style={{ background: color.value }} onClick={() => updateSelected({ background: color.value })}/>)}
               <label className="custom-color">{t('custom')}<input type="color" value={customColor} onChange={event => {setCustomColor(event.target.value); updateSelected({background:event.target.value});}} /></label></div>
