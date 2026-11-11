@@ -19,26 +19,63 @@ const backgrounds = [
 
 
 async function prepareBackgroundImage(file: File, maxEdge: number): Promise<{ blob: Blob; width: number; height: number }> {
-  const bitmap = await createImageBitmap(file);
-  try {
-    const longestEdge = Math.max(bitmap.width, bitmap.height);
-    const scale = Math.min(1, maxEdge / longestEdge);
-    const width = Math.max(1, Math.round(bitmap.width * scale));
-    const height = Math.max(1, Math.round(bitmap.height * scale));
-    if (scale === 1) return { blob: file, width, height };
+  // Normalize every accepted input to a browser-decoded PNG. Some source JPEG/WebP
+  // files (especially those with unusual metadata/encoding) cannot be decoded by
+  // the background-removal model directly, even though the browser can display them.
+  let bitmap: ImageBitmap | null = null;
+  let imageUrl: string | null = null;
+  let sourceImage: CanvasImageSource;
+  let sourceWidth = 0;
+  let sourceHeight = 0;
 
+  try {
+    try {
+      bitmap = await createImageBitmap(file);
+      sourceImage = bitmap;
+      sourceWidth = bitmap.width;
+      sourceHeight = bitmap.height;
+    } catch {
+      // Fallback for browsers/codecs where createImageBitmap cannot decode the file.
+      imageUrl = URL.createObjectURL(file);
+      const image = new Image();
+      image.decoding = 'async';
+      image.src = imageUrl;
+      await new Promise<void>((resolve, reject) => {
+        image.onload = () => resolve();
+        image.onerror = () => reject(new Error('This photo format could not be decoded by your browser. Please try saving it as JPG or PNG and upload again.'));
+      });
+      sourceImage = image;
+      sourceWidth = image.naturalWidth;
+      sourceHeight = image.naturalHeight;
+    }
+
+    if (!sourceWidth || !sourceHeight) {
+      throw new Error('The selected photo has invalid image dimensions. Please choose another JPG or PNG photo.');
+    }
+
+    const longestEdge = Math.max(sourceWidth, sourceHeight);
+    const scale = Math.min(1, maxEdge / longestEdge);
+    const width = Math.max(1, Math.round(sourceWidth * scale));
+    const height = Math.max(1, Math.round(sourceHeight * scale));
     const canvas = document.createElement('canvas');
     canvas.width = width;
     canvas.height = height;
     const context = canvas.getContext('2d');
-    if (!context) throw new Error('Could not prepare a smaller image for background removal.');
-    context.drawImage(bitmap, 0, 0, width, height);
+    if (!context) throw new Error('Could not prepare this photo for AI background removal.');
+
+    context.drawImage(sourceImage, 0, 0, width, height);
     const blob = await new Promise<Blob>((resolve, reject) => {
-      canvas.toBlob(value => value ? resolve(value) : reject(new Error('Could not resize this photo.')), 'image/png');
+      canvas.toBlob(
+        value => value ? resolve(value) : reject(new Error('Could not convert this photo to PNG. Please try another image.')),
+        'image/png',
+      );
     });
+
+    if (blob.size === 0) throw new Error('The converted photo is empty. Please upload the photo again.');
     return { blob, width, height };
   } finally {
-    bitmap.close();
+    bitmap?.close();
+    if (imageUrl) URL.revokeObjectURL(imageUrl);
   }
 }
 
