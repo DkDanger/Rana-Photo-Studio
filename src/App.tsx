@@ -65,6 +65,7 @@ export default function App() {
   const [lastBackground, setLastBackground] = useState(readLastBackground);
   const [busy, setBusy] = useState(false);
   const [cropMode, setCropMode] = useState(false);
+  const [isDraggingPhoto, setIsDraggingPhoto] = useState(false);
   const [layoutPreviewSources, setLayoutPreviewSources] = useState<Record<string, string>>({});
   const [selectedPreviewSource, setSelectedPreviewSource] = useState('');
   const dragRef = useRef<{ pointerId: number; x: number; y: number; offsetX: number; offsetY: number } | null>(null);
@@ -83,14 +84,16 @@ export default function App() {
       setSelectedPreviewSource('');
       return () => { cancelled = true; };
     }
-    setSelectedPreviewSource('');
+    // Do not regenerate the canvas on every pointer movement. Keep the last
+    // rendered frame visible, then refresh once the user releases the photo.
+    if (isDraggingPhoto) return () => { cancelled = true; };
     void renderPhoto(selected).then(canvas => {
       if (!cancelled) setSelectedPreviewSource(canvas.toDataURL('image/png'));
     }).catch(() => {
-      if (!cancelled) setSelectedPreviewSource('');
+      // Keep the previous preview visible if a refresh fails.
     });
     return () => { cancelled = true; };
-  }, [selected]);
+  }, [selected, isDraggingPhoto]);
 
   // Render the A4 thumbnails through the exact same canvas pipeline used by print/PDF.
   useEffect(() => {
@@ -164,6 +167,7 @@ export default function App() {
     if (!selected || !cropMode) return;
     event.preventDefault();
     event.currentTarget.setPointerCapture(event.pointerId);
+    setIsDraggingPhoto(true);
     dragRef.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, offsetX: selected.offsetX, offsetY: selected.offsetY };
   }
   function movePhotoDrag(event: React.PointerEvent<HTMLDivElement>) {
@@ -180,7 +184,10 @@ export default function App() {
     });
   }
   function stopPhotoDrag(event: React.PointerEvent<HTMLDivElement>) {
-    if (dragRef.current?.pointerId === event.pointerId) dragRef.current = null;
+    if (dragRef.current?.pointerId === event.pointerId) {
+      dragRef.current = null;
+      setIsDraggingPhoto(false);
+    }
   }
   function removePhoto(id: string) {
     setPhotos(items => {
@@ -258,7 +265,7 @@ export default function App() {
         <section className="panel editor-panel">
           <div className="panel-heading"><div><p className="eyebrow">{t('editor')}</p><h2>{selected?.name ?? t('noPhoto')}</h2></div>{selected && <button className="icon-button danger" title={t('remove')} onClick={() => removePhoto(selected.id)}><Trash2 size={17}/></button>}</div>
           {selected ? <>
-            <div className="photo-stage"><div className={cropMode ? "photo-preview crop-active" : "photo-preview"} style={{ backgroundColor: selected.background }} onPointerDown={startPhotoDrag} onPointerMove={movePhotoDrag} onPointerUp={stopPhotoDrag} onPointerCancel={stopPhotoDrag}><img draggable={false} src={selectedPreviewSource} alt="Selected passport portrait" /></div></div>
+            <div className="photo-stage"><div className={cropMode ? "photo-preview crop-active" : "photo-preview"} style={{ backgroundColor: selected.background }} onPointerDown={startPhotoDrag} onPointerMove={movePhotoDrag} onPointerUp={stopPhotoDrag} onPointerCancel={stopPhotoDrag}><img draggable={false} src={isDraggingPhoto ? selected.source : (selectedPreviewSource || selected.source)} alt="Selected passport portrait" style={isDraggingPhoto ? { transform: `translate(${selected.offsetX}%, ${selected.offsetY}%) rotate(${selected.rotation}deg) scale(${selected.zoom})`, filter: `brightness(${selected.brightness}%) contrast(${selected.contrast}%) saturate(${selected.saturation}%)` } : undefined} /></div></div>
             {selected.bgStatus === 'processing' && <div className="bg-progress" aria-live="polite"><div className="bg-progress-heading"><span><LoaderCircle size={15} className="progress-spinner" />{t('bgRemoving')}</span><strong>{selected.bgProgress ?? 0}%</strong></div><div className="bg-progress-track" role="progressbar" aria-label={t('bgRemoving')} aria-valuemin={0} aria-valuemax={100} aria-valuenow={selected.bgProgress ?? 0}><span style={{ width: `${selected.bgProgress ?? 0}%` }} /></div></div>}
             {selected.bgStatus === 'done' && <p className="bg-status bg-status-done"><CheckCircle2 size={17} />{t('bgRemoved')}</p>}
             {selected.bgStatus === 'failed' && <p className="bg-status bg-status-failed">{t('bgFailed')} {selected.bgError ? `(${selected.bgError})` : ''}</p>}
