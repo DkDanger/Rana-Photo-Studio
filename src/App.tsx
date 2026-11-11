@@ -55,7 +55,7 @@ export default function App() {
           model: 'lite',
           quality: 'quality',
           onProgress: ({ progress }) => {
-            const value = typeof progress === 'number' ? Math.max(0, Math.min(100, Math.round(progress))) : 0;
+            const value = typeof progress === 'number' ? Math.max(0, Math.min(100, Math.round(progress * 100))) : 0;
             setPhotos(items => items.map(photo => photo.id === item.photo.id ? { ...photo, bgProgress: value } : photo));
           },
         });
