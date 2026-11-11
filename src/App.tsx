@@ -34,8 +34,9 @@ export default function App() {
   const fileInput = useRef<HTMLInputElement>(null);
   const t = (key: Parameters<typeof getText>[1]) => getText(language, key);
   const selected = photos.find(photo => photo.id === selectedId) ?? photos[0] ?? null;
-  const cells = useMemo(() => calculateLayout(photos, settings), [photos, settings]);
-  const total = photos.reduce((sum, photo) => sum + photo.copies, 0);
+  const cells = useMemo(() => calculateLayout(savedPhotos, settings), [savedPhotos, settings]);
+  const savedPhotos = photos.filter(photo => photo.saved);
+  const total = savedPhotos.reduce((sum, photo) => sum + photo.copies, 0);
 
   function updateSelected(patch: Partial<PhotoItem>) {
     if (!selected) return;
@@ -103,10 +104,10 @@ export default function App() {
     setPhotos(items => items.map(photo => ({ ...photo, background: color })));
   }
   async function exportPdf() {
-    if (!photos.length) return;
+    if (!savedPhotos.length) return;
     setBusy(true);
     try {
-      const canvas = await buildPrintCanvas(photos, settings);
+      const canvas = await buildPrintCanvas(savedPhotos, settings);
       const pdf = new jsPDF({ orientation: settings.orientation, unit: 'mm', format: 'a4', compress: true });
       pdf.addImage(canvas.toDataURL('image/jpeg', 0.96), 'JPEG', 0, 0, settings.orientation === 'portrait' ? 210 : 297, settings.orientation === 'portrait' ? 297 : 210, undefined, 'FAST');
       pdf.save('Rana-Photo-Studio-A4.pdf');
@@ -115,7 +116,7 @@ export default function App() {
     } finally { setBusy(false); }
   }
   async function printSheet() {
-    if (!photos.length) return;
+    if (!savedPhotos.length) return;
     setBusy(true);
     try {
       const canvas = await buildPrintCanvas(photos, settings);
@@ -174,8 +175,8 @@ export default function App() {
               <label className="custom-color">{t('custom')}<input type="color" value={customColor} onChange={event => {setCustomColor(event.target.value); updateSelected({background:event.target.value});}} /></label></div>
               <button className="text-button" onClick={() => applyBackgroundToAll(selected.background)}>{t('applyAll')}</button><p className="help-note">{t('bgNote')}</p>
             </div>
-            {(['brightness','contrast','saturation','zoom'] as const).map(key => <div className="range-control" key={key}><label><span>{t(key)}</span><output>{key === 'zoom' ? selected[key].toFixed(2) + '×' : selected[key] + '%'}</output></label><input type="range" min={key === 'zoom' ? 0.7 : 50} max={key === 'zoom' ? 2 : 150} step={key === 'zoom' ? 0.05 : 1} value={selected[key]} onChange={event => updateSelected({[key]:Number(event.target.value)})}/></div>)}
-            <div className="editor-actions"><button className="button button-outline" onClick={() => updateSelected({rotation:(selected.rotation + 90) % 360})}><RotateCw size={16}/>{t('rotate')}</button><button className="button button-outline" onClick={resetSelected}>{t('reset')}</button><button className="button button-primary" onClick={downloadPhoto}><Download size={16}/> JPG</button></div>
+            {(['brightness','contrast','saturation','zoom'] as const).map(key => <div className="range-control" key={key}><label><span>{t(key)}</span><output>{key === 'zoom' ? selected[key].toFixed(2) + '×' : selected[key] + '%'}</output></label><input type="range" min={key === 'zoom' ? 0.7 : 50} max={key === 'zoom' ? 5 : 150} step={key === 'zoom' ? 0.05 : 1} value={selected[key]} onChange={event => updateSelected({[key]:Number(event.target.value)})}/></div>)}
+            <div className="editor-actions"><button className="button button-outline" onClick={() => updateSelected({rotation:(selected.rotation + 90) % 360})}><RotateCw size={16}/>{t('rotate')}</button><button className="button button-outline" onClick={resetSelected}>{t('reset')}</button><button className="button button-primary" onClick={() => updateSelected({ saved: true })}><ShieldCheck size={16}/>{selected.saved ? t('savedToLayout') : t('saveToLayout')}</button><button className="button button-outline" onClick={downloadPhoto}><Download size={16}/> JPG</button></div>
           </> : <div className="empty-state"><FileImage size={42}/><p>{t('noPhoto')}</p></div>}
           {photos.length > 0 && <div className="thumbnail-list">{photos.map(photo => <button key={photo.id} className={photo.id === selected?.id ? 'thumbnail selected' : 'thumbnail'} onClick={() => setSelectedId(photo.id)}><img src={photo.source} alt={photo.name}/><span>{photo.name}</span></button>)}</div>}
         </section>
@@ -191,7 +192,7 @@ export default function App() {
           <div className="paper-wrap"><div className={settings.orientation === 'portrait' ? 'paper' : 'paper landscape'}>{cells.map((cell,index)=><div key={cell.photo.id + '-' + index} className="paper-photo" style={{left:`${cell.x/(settings.orientation === 'portrait'?210:297)*100}%`,top:`${cell.y/(settings.orientation === 'portrait'?297:210)*100}%`,width:`${35/(settings.orientation === 'portrait'?210:297)*100}%`,height:`${45/(settings.orientation === 'portrait'?297:210)*100}%`,background:cell.photo.background}}><img src={cell.photo.source} alt="" style={{filter:`brightness(${cell.photo.brightness}%) contrast(${cell.photo.contrast}%) saturate(${cell.photo.saturation}%)`,transform:`rotate(${cell.photo.rotation}deg) scale(${cell.photo.zoom})`}}/></div>)}</div></div>
           <p className="muted small">{t('fitWarning')}</p>
           {cells.length < total && <p className="capacity-warning">{t('capacityWarning')}</p>}
-          <div className="print-actions"><button className="button button-outline" disabled={!photos.length || busy} onClick={printSheet}><Printer size={17}/>{t('print')}</button><button className="button button-primary" disabled={!photos.length || busy} onClick={exportPdf}><Download size={17}/>{busy ? '…' : t('pdf')}</button></div>
+          <div className="print-actions"><button className="button button-outline" disabled={!savedPhotos.length || busy} onClick={printSheet}><Printer size={17}/>{t('print')}</button><button className="button button-primary" disabled={!savedPhotos.length || busy} onClick={exportPdf}><Download size={17}/>{busy ? '…' : t('pdf')}</button></div>
         </section>
       </div>
 
