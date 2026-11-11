@@ -38,5 +38,6 @@ const hi = {
   delete: 'डिलीट',
   home: 'होम',
   printReady: 'प्रिंट के लिए तैयार शीट',
+  capacityWarning: 'एक A4 शीट में जगह सीमित है। कुछ कॉपी अभी इस पेज में शामिल नहीं होंगी; एक पेज में फिट करने के लिए कॉपी कम करें।',
 } as const;
 export default hi;
