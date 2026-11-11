@@ -63,9 +63,9 @@ export default function App() {
           ? { ...photo, source: transparentSource, bgStatus: 'done', bgProgress: 100 }
           : photo));
         URL.revokeObjectURL(item.photo.source);
-      } catch {
+      } catch (error) {
         setPhotos(items => items.map(photo => photo.id === item.photo.id
-          ? { ...photo, bgStatus: 'failed' }
+          ? { ...photo, bgStatus: 'failed', bgError: error instanceof Error ? error.message.slice(0, 240) : String(error).slice(0, 240) }
           : photo));
       }
     }
@@ -148,7 +148,7 @@ export default function App() {
             <div className="photo-stage"><div className="photo-preview" style={{ backgroundColor: selected.background }}><img src={selected.source} alt="Selected passport portrait" style={{ transform: `rotate(${selected.rotation}deg) scale(${selected.zoom})`, filter: `brightness(${selected.brightness}%) contrast(${selected.contrast}%) saturate(${selected.saturation}%)` }} /></div></div>
             {selected.bgStatus === 'processing' && <p className="help-note">{t('bgRemoving')} {selected.bgProgress ?? 0}%</p>}
             {selected.bgStatus === 'done' && <p className="help-note">{t('bgRemoved')}</p>}
-            {selected.bgStatus === 'failed' && <p className="help-note">{t('bgFailed')}</p>}
+            {selected.bgStatus === 'failed' && <p className="help-note">{t('bgFailed')} {selected.bgError ? `(${selected.bgError})` : ''}</p>}
             <div className="size-line"><span>{t('size')}</span><span>{t('dpi')}</span></div>
             <div className="control-block"><label>{t('background')}</label><div className="swatches">{backgrounds.map(color => <button key={color.value} title={color.name} className={selected.background === color.value ? 'swatch active' : 'swatch'} style={{ background: color.value }} onClick={() => updateSelected({ background: color.value })}/>)}
               <label className="custom-color">{t('custom')}<input type="color" value={customColor} onChange={event => {setCustomColor(event.target.value); updateSelected({background:event.target.value});}} /></label></div>
