@@ -135,21 +135,30 @@ export default function App() {
 
     // Process sequentially to avoid exhausting memory on phones.
     for (const item of added) {
+      const progressStartedAt = Date.now();
+      // This is an elapsed-time indicator, not the AI model's internal progress.
+      // It fills over 60 seconds, briefly reaches 100%, then starts again until processing ends.
+      const progressTimer = window.setInterval(() => {
+        const elapsed = Date.now() - progressStartedAt;
+        const elapsedInCycle = elapsed % 60_000;
+        const value = elapsed > 0 && elapsedInCycle < 250
+          ? 100
+          : Math.min(99, Math.floor((elapsedInCycle / 60_000) * 100));
+        setPhotos(items => items.map(photo => photo.id === item.photo.id
+          ? { ...photo, bgProgress: value }
+          : photo));
+      }, 250);
       try {
-        const onProgress = ({ progress }: { progress?: number }) => {
-          const value = typeof progress === 'number' ? Math.max(0, Math.min(100, Math.round(progress * 100))) : 0;
-          setPhotos(items => items.map(photo => photo.id === item.photo.id ? { ...photo, bgProgress: value } : photo));
-        };
         // Keep AI input within a phone-friendly size; passport output needs far fewer pixels.
         const prepared = await prepareBackgroundImage(item.file, 1280);
         let result;
         try {
-          result = await removeBackground(prepared.blob, { quality: 'fast', onProgress });
+          result = await removeBackground(prepared.blob, { quality: 'fast' });
         } catch (firstError) {
           // Retry once with a smaller input when a large image exhausts browser memory.
           if (Math.max(prepared.width, prepared.height) <= 768) throw firstError;
           const smaller = await prepareBackgroundImage(item.file, 768);
-          result = await removeBackground(smaller.blob, { quality: 'fast', onProgress });
+          result = await removeBackground(smaller.blob, { quality: 'fast' });
         }
         const transparentSource = URL.createObjectURL(result.blob);
         setPhotos(items => items.map(photo => photo.id === item.photo.id
@@ -160,6 +169,8 @@ export default function App() {
         setPhotos(items => items.map(photo => photo.id === item.photo.id
           ? { ...photo, bgStatus: 'failed', bgError: error instanceof Error ? error.message.slice(0, 240) : String(error).slice(0, 240) }
           : photo));
+      } finally {
+        window.clearInterval(progressTimer);
       }
     }
   }
