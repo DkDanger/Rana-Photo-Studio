@@ -3,7 +3,7 @@
 A responsive passport-photo editing and A4 print-layout web application.
 
 **Repository:** `DkDanger/Rana-Photo-Studio`  
-**Status:** Project repository initialized; application source files have not yet been uploaded.
+**Status:** First application source implementation committed. Build and device testing are still required.
 
 ## Project goals
 
@@ -30,7 +30,7 @@ Do not commit API keys, passwords, access tokens, private customer photos, or ot
 
 ## Current source-code status
 
-The initial repository currently contains this README only. Source files discussed in earlier ChatGPT conversations are not yet present here as complete, verified files. They must be recovered from the original code messages or supplied again before they can safely be committed.
+The first working-source implementation is now present. Some advanced features (especially AI background removal, persistent project storage, undo/redo and offline model caching) remain future work and are listed honestly below.
 
 ## Planned source structure
 
