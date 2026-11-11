@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
-import { Camera, FileImage, Languages, Minus, Plus, Printer, RotateCw, Trash2, Upload, Download, ShieldCheck } from 'lucide-react';
+import { Camera, CheckCircle2, FileImage, Languages, LoaderCircle, Minus, Plus, Printer, RotateCw, Trash2, Upload, Download, ShieldCheck } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import { removeBackground } from '@bg0/browser';
 import type { Language, PhotoItem, PrintSettings } from './types';
@@ -42,8 +42,17 @@ async function prepareBackgroundImage(file: File, maxEdge: number): Promise<{ bl
   }
 }
 
-const newPhoto = (file: File, source: string): PhotoItem => ({
-  id: createId(), name: file.name, source, copies: 1, background: '#ffffff',
+const LAST_BACKGROUND_KEY = 'rana-photo-studio-last-background';
+
+function readLastBackground(): string {
+  try {
+    const value = window.localStorage.getItem(LAST_BACKGROUND_KEY);
+    return value && /^#[0-9a-f]{6}$/i.test(value) ? value : '#ffffff';
+  } catch { return '#ffffff'; }
+}
+
+const newPhoto = (file: File, source: string, background: string): PhotoItem => ({
+  id: createId(), name: file.name, source, copies: 1, background,
   rotation: 0, brightness: 100, contrast: 100, saturation: 100, zoom: 1, offsetX: 0, offsetY: 0,
 });
 
@@ -52,7 +61,8 @@ export default function App() {
   const [photos, setPhotos] = useState<PhotoItem[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [settings, setSettings] = useState<PrintSettings>(DEFAULT_PRINT_SETTINGS);
-  const [customColor, setCustomColor] = useState('#ffffff');
+  const [customColor, setCustomColor] = useState(readLastBackground);
+  const [lastBackground, setLastBackground] = useState(readLastBackground);
   const [busy, setBusy] = useState(false);
   const [cropMode, setCropMode] = useState(false);
   const [layoutPreviewSources, setLayoutPreviewSources] = useState<Record<string, string>>({});
@@ -82,6 +92,12 @@ export default function App() {
     return () => { cancelled = true; };
   }, [cells]);
 
+  function rememberBackground(color: string) {
+    setLastBackground(color);
+    setCustomColor(color);
+    try { window.localStorage.setItem(LAST_BACKGROUND_KEY, color); } catch { /* Storage may be unavailable in private browsing. */ }
+  }
+
   function updateSelected(patch: Partial<PhotoItem>) {
     if (!selected) return;
     setPhotos(items => items.map(photo => photo.id === selected.id ? { ...photo, ...patch } : photo));
@@ -90,7 +106,7 @@ export default function App() {
     const valid = Array.from(files).filter(file => ['image/jpeg', 'image/png', 'image/webp'].includes(file.type));
     const added = valid.map(file => ({
       file,
-      photo: { ...newPhoto(file, URL.createObjectURL(file)), bgStatus: 'processing' as const, bgProgress: 0 },
+      photo: { ...newPhoto(file, URL.createObjectURL(file), lastBackground), bgStatus: 'processing' as const, bgProgress: 0 },
     }));
     if (!added.length) return;
     setPhotos(items => [...items, ...added.map(item => item.photo)]);
@@ -138,7 +154,12 @@ export default function App() {
     const rect = event.currentTarget.getBoundingClientRect();
     const dx = (event.clientX - drag.x) / rect.width * 100;
     const dy = (event.clientY - drag.y) / rect.height * 100;
-    updateSelected({ offsetX: Math.max(-100, Math.min(100, drag.offsetX + dx)), offsetY: Math.max(-100, Math.min(100, drag.offsetY + dy)) });
+    // At high zoom, allow a much wider travel range so the portrait can be repositioned fully.
+    const movementLimit = 50 + selected.zoom * 50;
+    updateSelected({
+      offsetX: Math.max(-movementLimit, Math.min(movementLimit, drag.offsetX + dx)),
+      offsetY: Math.max(-movementLimit, Math.min(movementLimit, drag.offsetY + dy)),
+    });
   }
   function stopPhotoDrag(event: React.PointerEvent<HTMLDivElement>) {
     if (dragRef.current?.pointerId === event.pointerId) dragRef.current = null;
@@ -190,6 +211,7 @@ export default function App() {
     link.click();
   }
   function resetSelected() {
+    rememberBackground('#ffffff');
     updateSelected({ rotation: 0, brightness: 100, contrast: 100, saturation: 100, zoom: 1, offsetX: 0, offsetY: 0, background: '#ffffff' });
   }
 
@@ -219,12 +241,12 @@ export default function App() {
           <div className="panel-heading"><div><p className="eyebrow">{t('editor')}</p><h2>{selected?.name ?? t('noPhoto')}</h2></div>{selected && <button className="icon-button danger" title={t('remove')} onClick={() => removePhoto(selected.id)}><Trash2 size={17}/></button>}</div>
           {selected ? <>
             <div className="photo-stage"><div className={cropMode ? "photo-preview crop-active" : "photo-preview"} style={{ backgroundColor: selected.background }} onPointerDown={startPhotoDrag} onPointerMove={movePhotoDrag} onPointerUp={stopPhotoDrag} onPointerCancel={stopPhotoDrag}><img draggable={false} src={selected.source} alt="Selected passport portrait" style={{ transform: `translate(${selected.offsetX}%, ${selected.offsetY}%) rotate(${selected.rotation}deg) scale(${selected.zoom})`, filter: `brightness(${selected.brightness}%) contrast(${selected.contrast}%) saturate(${selected.saturation}%)` }} /></div></div>
-            {selected.bgStatus === 'processing' && <p className="help-note">{t('bgRemoving')} {selected.bgProgress ?? 0}%</p>}
-            {selected.bgStatus === 'done' && <p className="help-note">{t('bgRemoved')}</p>}
-            {selected.bgStatus === 'failed' && <p className="help-note">{t('bgFailed')} {selected.bgError ? `(${selected.bgError})` : ''}</p>}
+            {selected.bgStatus === 'processing' && <div className="bg-progress" aria-live="polite"><div className="bg-progress-heading"><span><LoaderCircle size={15} className="progress-spinner" />{t('bgRemoving')}</span><strong>{selected.bgProgress ?? 0}%</strong></div><div className="bg-progress-track" role="progressbar" aria-label={t('bgRemoving')} aria-valuemin={0} aria-valuemax={100} aria-valuenow={selected.bgProgress ?? 0}><span style={{ width: `${selected.bgProgress ?? 0}%` }} /></div></div>}
+            {selected.bgStatus === 'done' && <p className="bg-status bg-status-done"><CheckCircle2 size={17} />{t('bgRemoved')}</p>}
+            {selected.bgStatus === 'failed' && <p className="bg-status bg-status-failed">{t('bgFailed')} {selected.bgError ? `(${selected.bgError})` : ''}</p>}
             <div className="editor-actions crop-actions"><button className={cropMode ? "button button-primary" : "button button-outline"} onClick={() => setCropMode(value => !value)}>{t('cropMove')}</button><button className="button button-outline" onClick={() => updateSelected({ offsetX: 0, offsetY: 0 })}>{t('autoCenter')}</button></div><p className="help-note">{cropMode ? t('dragPhoto') : t('cropHint')}</p><div className="size-line"><span>{t('size')}</span><span>{t('dpi')}</span></div>
-            <div className="control-block"><label>{t('background')}</label><div className="swatches">{backgrounds.map(color => <button key={color.value} title={color.name} className={selected.background === color.value ? 'swatch active' : 'swatch'} style={{ background: color.value }} onClick={() => updateSelected({ background: color.value })}/>)}
-              <label className="custom-color">{t('custom')}<input type="color" value={customColor} onChange={event => {setCustomColor(event.target.value); updateSelected({background:event.target.value});}} /></label></div>
+            <div className="control-block"><label>{t('background')}</label><div className="swatches">{backgrounds.map(color => <button key={color.value} title={color.name} className={selected.background === color.value ? 'swatch active' : 'swatch'} style={{ background: color.value }} onClick={() => { rememberBackground(color.value); updateSelected({ background: color.value }); }}/>)}
+              <label className="custom-color">{t('custom')}<input type="color" value={customColor} onChange={event => {rememberBackground(event.target.value); updateSelected({background:event.target.value});}} /></label></div>
               <button className="text-button" onClick={() => applyBackgroundToAll(selected.background)}>{t('applyAll')}</button><p className="help-note">{t('bgNote')}</p>
             </div>
             {(['brightness','contrast','saturation','zoom'] as const).map(key => <div className="range-control" key={key}><label><span>{t(key)}</span><output>{key === 'zoom' ? selected[key].toFixed(2) + '×' : selected[key] + '%'}</output></label><input type="range" min={key === 'zoom' ? 0.7 : 50} max={key === 'zoom' ? 5 : 150} step={key === 'zoom' ? 0.05 : 1} value={selected[key]} onChange={event => updateSelected({[key]:Number(event.target.value)})}/></div>)}
