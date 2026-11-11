@@ -6,6 +6,7 @@ export interface PhotoItem {
   name: string;
   source: string;
   copies: number;
+  saved?: boolean;
   background: string;
   rotation: number;
   brightness: number;
