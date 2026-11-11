@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from 'react';
+import type { PointerEvent as ReactPointerEvent } from 'react';
 import { Camera, FileImage, Languages, Minus, Plus, Printer, RotateCw, Trash2, Upload, Download, ShieldCheck } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import { removeBackground } from '@bg0/browser';
@@ -72,7 +73,7 @@ export default function App() {
       }
     }
   }
-  function startPhotoDrag(event: React.PointerEvent<HTMLDivElement>) {
+  function startPhotoDrag(event: ReactPointerEvent<HTMLDivElement>) {
     if (!selected || !cropMode) return;
     event.preventDefault();
     event.currentTarget.setPointerCapture(event.pointerId);
