@@ -172,19 +172,6 @@ export default function App() {
 
     // Process sequentially to avoid exhausting memory on phones.
     for (const item of added) {
-      const progressStartedAt = Date.now();
-      // This is an elapsed-time indicator, not the AI model's internal progress.
-      // It fills over 60 seconds, briefly reaches 100%, then starts again until processing ends.
-      const progressTimer = window.setInterval(() => {
-        const elapsed = Date.now() - progressStartedAt;
-        const elapsedInCycle = elapsed % 60_000;
-        const value = elapsed > 0 && elapsedInCycle < 250
-          ? 100
-          : Math.min(99, Math.floor((elapsedInCycle / 60_000) * 100));
-        setPhotos(items => items.map(photo => photo.id === item.photo.id
-          ? { ...photo, bgProgress: value }
-          : photo));
-      }, 250);
       try {
         // Keep AI input within a phone-friendly size; passport output needs far fewer pixels.
         const prepared = await prepareBackgroundImage(item.file, 1280);
@@ -206,8 +193,6 @@ export default function App() {
         setPhotos(items => items.map(photo => photo.id === item.photo.id
           ? { ...photo, bgStatus: 'failed', bgError: error instanceof Error ? error.message.slice(0, 240) : String(error).slice(0, 240) }
           : photo));
-      } finally {
-        window.clearInterval(progressTimer);
       }
     }
   }
@@ -314,7 +299,7 @@ export default function App() {
           <div className="panel-heading"><div><p className="eyebrow">{t('editor')}</p><h2>{selected?.name ?? t('noPhoto')}</h2></div>{selected && <button className="icon-button danger" title={t('remove')} onClick={() => removePhoto(selected.id)}><Trash2 size={17}/></button>}</div>
           {selected ? <>
             <div className="photo-stage"><div className={cropMode ? "photo-preview crop-active" : "photo-preview"} style={{ backgroundColor: selected.background }} onPointerDown={startPhotoDrag} onPointerMove={movePhotoDrag} onPointerUp={stopPhotoDrag} onPointerCancel={stopPhotoDrag}><img draggable={false} src={isDraggingPhoto ? selected.source : (selectedPreviewSource || selected.source)} alt="Selected passport portrait" style={isDraggingPhoto ? { transform: `translate(${selected.offsetX}%, ${selected.offsetY}%) rotate(${selected.rotation}deg) scale(${selected.zoom})`, filter: `brightness(${selected.brightness}%) contrast(${selected.contrast}%) saturate(${selected.saturation}%)` } : undefined} /></div></div>
-            {selected.bgStatus === 'processing' && <div className="bg-progress" aria-live="polite"><div className="bg-progress-heading"><span><LoaderCircle size={15} className="progress-spinner" />{t('bgRemoving')}</span><strong>{selected.bgProgress ?? 0}%</strong></div><div className="bg-progress-track" role="progressbar" aria-label={t('bgRemoving')} aria-valuemin={0} aria-valuemax={100} aria-valuenow={selected.bgProgress ?? 0}><span style={{ width: `${selected.bgProgress ?? 0}%` }} /></div></div>}
+            {selected.bgStatus === 'processing' && <div className="bg-progress" aria-live="polite"><div className="bg-progress-heading"><span><LoaderCircle size={15} className="progress-spinner" />{t('bgRemoving')}</span><span className="bg-progress-cycle-label">Auto cycle · 1 min</span></div><div className="bg-progress-track bg-progress-cycle" role="progressbar" aria-label={t('bgRemoving')}><span /></div></div>}
             {selected.bgStatus === 'done' && <p className="bg-status bg-status-done"><CheckCircle2 size={17} />{t('bgRemoved')}</p>}
             {selected.bgStatus === 'failed' && <p className="bg-status bg-status-failed">{t('bgFailed')} {selected.bgError ? `(${selected.bgError})` : ''}</p>}
             <div className="editor-actions crop-actions"><button className={cropMode ? "button button-primary" : "button button-outline"} onClick={() => setCropMode(value => !value)}>{t('cropMove')}</button><button className="button button-outline" onClick={() => updateSelected({ offsetX: 0, offsetY: 0 })}>{t('autoCenter')}</button></div><p className="help-note">{cropMode ? t('dragPhoto') : t('cropHint')}</p><div className="size-line"><span>{t('size')}</span><span>{t('dpi')}</span></div>
