@@ -14,6 +14,8 @@ export interface PhotoItem {
   zoom: number;
   offsetX: number;
   offsetY: number;
+  bgStatus?: 'processing' | 'done' | 'failed';
+  bgProgress?: number;
 }
 
 export interface PrintSettings {
