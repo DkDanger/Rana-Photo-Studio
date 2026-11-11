@@ -38,5 +38,6 @@ const en = {
   delete: 'Delete',
   home: 'Home',
   printReady: 'Print-ready sheet',
+  capacityWarning: 'The first A4 sheet has limited space. Some copies are not shown or exported yet; reduce the copy count to fit one page.',
 } as const;
 export default en;
