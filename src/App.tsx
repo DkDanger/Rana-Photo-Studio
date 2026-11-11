@@ -60,7 +60,7 @@ export default function App() {
   const fileInput = useRef<HTMLInputElement>(null);
   const t = (key: Parameters<typeof getText>[1]) => getText(language, key);
   const selected = photos.find(photo => photo.id === selectedId) ?? photos[0] ?? null;
-  const savedPhotos = photos.filter(photo => photo.saved);
+  const savedPhotos = useMemo(() => photos.filter(photo => photo.saved), [photos]);
   const cells = useMemo(() => calculateLayout(savedPhotos, settings), [savedPhotos, settings]);
   const total = savedPhotos.reduce((sum, photo) => sum + photo.copies, 0);
 
