@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
 import { Camera, FileImage, Languages, Minus, Plus, Printer, RotateCw, Trash2, Upload, Download, ShieldCheck } from 'lucide-react';
 import { jsPDF } from 'jspdf';
@@ -55,6 +55,7 @@ export default function App() {
   const [customColor, setCustomColor] = useState('#ffffff');
   const [busy, setBusy] = useState(false);
   const [cropMode, setCropMode] = useState(false);
+  const [layoutPreviewSources, setLayoutPreviewSources] = useState<Record<string, string>>({});
   const dragRef = useRef<{ pointerId: number; x: number; y: number; offsetX: number; offsetY: number } | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const t = (key: Parameters<typeof getText>[1]) => getText(language, key);
@@ -62,6 +63,24 @@ export default function App() {
   const savedPhotos = photos.filter(photo => photo.saved);
   const cells = useMemo(() => calculateLayout(savedPhotos, settings), [savedPhotos, settings]);
   const total = savedPhotos.reduce((sum, photo) => sum + photo.copies, 0);
+
+  // Render the A4 thumbnails through the exact same canvas pipeline used by print/PDF.
+  useEffect(() => {
+    let cancelled = false;
+    async function renderLayoutPreviews() {
+      try {
+        const entries = await Promise.all(cells.map(async (cell, index) => {
+          const canvas = await renderPhoto(cell.photo);
+          return [`${cell.photo.id}-${index}`, canvas.toDataURL('image/png')] as const;
+        }));
+        if (!cancelled) setLayoutPreviewSources(Object.fromEntries(entries));
+      } catch {
+        if (!cancelled) setLayoutPreviewSources({});
+      }
+    }
+    void renderLayoutPreviews();
+    return () => { cancelled = true; };
+  }, [cells]);
 
   function updateSelected(patch: Partial<PhotoItem>) {
     if (!selected) return;
@@ -222,7 +241,7 @@ export default function App() {
             <label>{t('spacing')}<input type="number" min="0" max="15" value={settings.spacingMm} onChange={event => setSettings(s => ({...s,spacingMm:Math.max(0,Number(event.target.value))}))}/></label>
             <label>{t('columns')}<select value={settings.columns} onChange={event => setSettings(s => ({...s,columns:Number(event.target.value)}))}>{[1,2,3,4,5,6].map(n=><option key={n} value={n}>{n}</option>)}</select></label>
           </div>
-          <div className="paper-wrap"><div className={settings.orientation === 'portrait' ? 'paper' : 'paper landscape'}>{cells.map((cell,index)=><div key={cell.photo.id + '-' + index} className="paper-photo" style={{left:`${cell.x/(settings.orientation === 'portrait'?210:297)*100}%`,top:`${cell.y/(settings.orientation === 'portrait'?297:210)*100}%`,width:`${35/(settings.orientation === 'portrait'?210:297)*100}%`,height:`${45/(settings.orientation === 'portrait'?297:210)*100}%`,background:cell.photo.background}}><img src={cell.photo.source} alt="" style={{filter:`brightness(${cell.photo.brightness}%) contrast(${cell.photo.contrast}%) saturate(${cell.photo.saturation}%)`,transform:`translate(${cell.photo.offsetX}%, ${cell.photo.offsetY}%) rotate(${cell.photo.rotation}deg) scale(${cell.photo.zoom})`}}/></div>)}</div></div>
+          <div className="paper-wrap"><div className={settings.orientation === 'portrait' ? 'paper' : 'paper landscape'}>{cells.map((cell,index)=><div key={cell.photo.id + '-' + index} className="paper-photo" style={{left:`${cell.x/(settings.orientation === 'portrait'?210:297)*100}%`,top:`${cell.y/(settings.orientation === 'portrait'?297:210)*100}%`,width:`${35/(settings.orientation === 'portrait'?210:297)*100}%`,height:`${45/(settings.orientation === 'portrait'?297:210)*100}%`,background:cell.photo.background}}><img src={layoutPreviewSources[`${cell.photo.id}-${index}`] ?? ""} alt="" /></div>)}</div></div>
           <p className="muted small">{t('fitWarning')}</p>
           {cells.length < total && <p className="capacity-warning">{t('capacityWarning')}</p>}
           <div className="print-actions"><button className="button button-outline" disabled={!savedPhotos.length || busy} onClick={printSheet}><Printer size={17}/>{t('print')}</button><button className="button button-primary" disabled={!savedPhotos.length || busy} onClick={exportPdf}><Download size={17}/>{busy ? '…' : t('pdf')}</button></div>
