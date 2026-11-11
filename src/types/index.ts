@@ -16,6 +16,7 @@ export interface PhotoItem {
   offsetY: number;
   bgStatus?: 'processing' | 'done' | 'failed';
   bgProgress?: number;
+  bgError?: string;
 }
 
 export interface PrintSettings {
