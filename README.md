@@ -11,7 +11,7 @@ A responsive passport-photo editing and A4 print-layout web application.
 - Prepare print output at **300 DPI** (approximately **413 × 531 px**).
 - Upload and edit JPG, JPEG, PNG, and WebP images.
 - Crop, rotate, adjust brightness/contrast/saturation, and position faces.
-- Remove or replace photo backgrounds using a verifiable free/open-source model where practical.
+- Automatically remove photo backgrounds after upload using the browser-based BiRefNet-lite AI model; images stay on the device.
 - Arrange multiple photos on A4 paper with adjustable margins, spacing, and copies.
 - Export print-ready PDF and support browser printing at 100% scale.
 - Provide Hindi and English interface translations.
@@ -30,7 +30,7 @@ Do not commit API keys, passwords, access tokens, private customer photos, or ot
 
 ## Current source-code status
 
-The first working-source implementation is now present. Some advanced features (especially AI background removal, persistent project storage, undo/redo and offline model caching) remain future work and are listed honestly below.
+The first working-source implementation is now present. AI background removal is integrated using `@bg0/browser` with the BiRefNet-lite model. The model (about 94 MiB) downloads on first use and is cached by the browser; processing runs on-device. Persistent project storage, undo/redo and offline app caching remain future work.
 
 ## Planned source structure
 
