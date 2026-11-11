@@ -66,6 +66,7 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const [cropMode, setCropMode] = useState(false);
   const [layoutPreviewSources, setLayoutPreviewSources] = useState<Record<string, string>>({});
+  const [selectedPreviewSource, setSelectedPreviewSource] = useState('');
   const dragRef = useRef<{ pointerId: number; x: number; y: number; offsetX: number; offsetY: number } | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const t = (key: Parameters<typeof getText>[1]) => getText(language, key);
@@ -73,6 +74,23 @@ export default function App() {
   const savedPhotos = useMemo(() => photos.filter(photo => photo.saved), [photos]);
   const cells = useMemo(() => calculateLayout(savedPhotos, settings), [savedPhotos, settings]);
   const total = savedPhotos.reduce((sum, photo) => sum + photo.copies, 0);
+
+  // Keep the editor preview on the same canvas pipeline as A4 preview, JPG and PDF.
+  // This prevents the selected photo and its printed copy from using different crop math.
+  useEffect(() => {
+    let cancelled = false;
+    if (!selected) {
+      setSelectedPreviewSource('');
+      return () => { cancelled = true; };
+    }
+    setSelectedPreviewSource('');
+    void renderPhoto(selected).then(canvas => {
+      if (!cancelled) setSelectedPreviewSource(canvas.toDataURL('image/png'));
+    }).catch(() => {
+      if (!cancelled) setSelectedPreviewSource('');
+    });
+    return () => { cancelled = true; };
+  }, [selected]);
 
   // Render the A4 thumbnails through the exact same canvas pipeline used by print/PDF.
   useEffect(() => {
@@ -240,7 +258,7 @@ export default function App() {
         <section className="panel editor-panel">
           <div className="panel-heading"><div><p className="eyebrow">{t('editor')}</p><h2>{selected?.name ?? t('noPhoto')}</h2></div>{selected && <button className="icon-button danger" title={t('remove')} onClick={() => removePhoto(selected.id)}><Trash2 size={17}/></button>}</div>
           {selected ? <>
-            <div className="photo-stage"><div className={cropMode ? "photo-preview crop-active" : "photo-preview"} style={{ backgroundColor: selected.background }} onPointerDown={startPhotoDrag} onPointerMove={movePhotoDrag} onPointerUp={stopPhotoDrag} onPointerCancel={stopPhotoDrag}><img draggable={false} src={selected.source} alt="Selected passport portrait" style={{ transform: `translate(${selected.offsetX}%, ${selected.offsetY}%) rotate(${selected.rotation}deg) scale(${selected.zoom})`, filter: `brightness(${selected.brightness}%) contrast(${selected.contrast}%) saturate(${selected.saturation}%)` }} /></div></div>
+            <div className="photo-stage"><div className={cropMode ? "photo-preview crop-active" : "photo-preview"} style={{ backgroundColor: selected.background }} onPointerDown={startPhotoDrag} onPointerMove={movePhotoDrag} onPointerUp={stopPhotoDrag} onPointerCancel={stopPhotoDrag}><img draggable={false} src={selectedPreviewSource} alt="Selected passport portrait" /></div></div>
             {selected.bgStatus === 'processing' && <div className="bg-progress" aria-live="polite"><div className="bg-progress-heading"><span><LoaderCircle size={15} className="progress-spinner" />{t('bgRemoving')}</span><strong>{selected.bgProgress ?? 0}%</strong></div><div className="bg-progress-track" role="progressbar" aria-label={t('bgRemoving')} aria-valuemin={0} aria-valuemax={100} aria-valuenow={selected.bgProgress ?? 0}><span style={{ width: `${selected.bgProgress ?? 0}%` }} /></div></div>}
             {selected.bgStatus === 'done' && <p className="bg-status bg-status-done"><CheckCircle2 size={17} />{t('bgRemoved')}</p>}
             {selected.bgStatus === 'failed' && <p className="bg-status bg-status-failed">{t('bgFailed')} {selected.bgError ? `(${selected.bgError})` : ''}</p>}
