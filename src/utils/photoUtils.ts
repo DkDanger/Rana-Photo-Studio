@@ -17,25 +17,6 @@ export function loadImage(source: string): Promise<HTMLImageElement> {
   });
 }
 
-export function createPhotoCanvas(photo: PhotoItem, width = PHOTO_WIDTH_PX, height = PHOTO_HEIGHT_PX): HTMLCanvasElement {
-  const canvas = document.createElement('canvas');
-  canvas.width = width;
-  canvas.height = height;
-  const ctx = canvas.getContext('2d');
-  if (!ctx) throw new Error('Canvas is not supported by this browser');
-  ctx.fillStyle = photo.background;
-  ctx.fillRect(0, 0, width, height);
-  ctx.save();
-  ctx.translate(width / 2, height / 2);
-  ctx.rotate(photo.rotation * Math.PI / 180);
-  ctx.filter = `brightness(${photo.brightness}%) contrast(${photo.contrast}%) saturate(${photo.saturation}%)`;
-  const imagePromise = loadImage(photo.source);
-  // The synchronous canvas factory is paired with the async renderer below.
-  void imagePromise;
-  ctx.restore();
-  return canvas;
-}
-
 export async function renderPhoto(photo: PhotoItem, width = PHOTO_WIDTH_PX, height = PHOTO_HEIGHT_PX): Promise<HTMLCanvasElement> {
   const canvas = document.createElement('canvas');
   canvas.width = width;
