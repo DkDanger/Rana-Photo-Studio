@@ -13,6 +13,8 @@ const en = {
   saturation: 'Saturation',
   zoom: 'Zoom',
   cropMove: 'Crop / Move photo',
+  saveToLayout: 'Save to A4 layout',
+  savedToLayout: 'Saved to A4 layout',
   autoCenter: 'Auto center',
   dragPhoto: 'Drag the photo with your mouse or finger to adjust the crop.',
   cropHint: 'Use Crop / Move to position the photo inside the passport frame.',
