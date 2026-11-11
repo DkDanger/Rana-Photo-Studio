@@ -34,8 +34,8 @@ export default function App() {
   const fileInput = useRef<HTMLInputElement>(null);
   const t = (key: Parameters<typeof getText>[1]) => getText(language, key);
   const selected = photos.find(photo => photo.id === selectedId) ?? photos[0] ?? null;
-  const cells = useMemo(() => calculateLayout(savedPhotos, settings), [savedPhotos, settings]);
   const savedPhotos = photos.filter(photo => photo.saved);
+  const cells = useMemo(() => calculateLayout(savedPhotos, settings), [savedPhotos, settings]);
   const total = savedPhotos.reduce((sum, photo) => sum + photo.copies, 0);
 
   function updateSelected(patch: Partial<PhotoItem>) {
@@ -119,7 +119,7 @@ export default function App() {
     if (!savedPhotos.length) return;
     setBusy(true);
     try {
-      const canvas = await buildPrintCanvas(photos, settings);
+      const canvas = await buildPrintCanvas(savedPhotos, settings);
       const data = canvas.toDataURL('image/jpeg', 0.96);
       const win = window.open('', '_blank');
       if (!win) { alert('Please allow pop-ups to print.'); return; }
